@@ -1,106 +1,57 @@
 import os
 
-from flask import Flask, jsonify, render_template, request
-from datetime import datetime, timedelta
+from flask import Flask, render_template, send_file
 
 
-app = Flask(__name__)
-
+app = Flask(__name__, static_folder='src/static', template_folder='src/templates')
 
 # Página inicial
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# Página de login
-@app.route('/login')
-def login():
-    return render_template('login.html')
-
-# Página de perfil do usuário
-@app.route('/profile')
-def profile():
-    return render_template('profile.html', usuario='ifpi', senha='ifpi')
-
-# Página sobre o site
-@app.route('/about')
-def about():
-    return render_template('about.html')
-
-# Calculadora de IMC (página inicial)
-@app.route('/imc')
-def imc():
-    # Valores iniciais para o primeiro carregamento da página
-    return render_template('imc.html', peso=70, altura=1.75, imc=None, status=None)
-
-# Endpoint para calcular o IMC via AJAX
-@app.route('/calculate_imc', methods=['POST'])
-def calculate_imc():
-    data = request.get_json()
-    try:
-        peso = float(data['peso'])
-        altura = float(data['altura'])
-
-        if altura == 0:
-            return jsonify({'error': 'Altura não pode ser zero.'}), 400
-
-        valor_imc = peso / (altura ** 2)
-
-        if valor_imc < 18.5:
-            status = "Abaixo do peso"
-        elif valor_imc < 25:
-            status = "Peso normal"
-        elif valor_imc < 30:
-            status = "Sobrepeso"
-        else:
-            status = "Obesidade"
-
-        return jsonify({
-            'imc': round(valor_imc, 2),
-            'status': status
-        })
-    except (ValueError, KeyError):
-        return jsonify({'error': 'Dados inválidos.'}), 400
-
-# Página de cálculo do período fértil
-@app.route('/periodo_fertil')
-def fertile_period_page():
-    return render_template('fertile_period.html', data=None, inicio=None, fim=None)
-
-# Endpoint para calcular o período fértil via AJAX
-@app.route('/calculate_fertile_period', methods=['POST'])
-def calculate_fertile_period():
-    data = request.get_json()
-    try:
-        # A data virá no formato 'YYYY-MM-DD' do input type="date"
-        last_cycle_str = data['last_cycle_date']
-        data_ciclo = datetime.strptime(last_cycle_str, '%Y-%m-%d')
-        
-        ovulacao = data_ciclo + timedelta(days=14)
-        inicio_fertil = ovulacao - timedelta(days=4)
-        fim_fertil = ovulacao + timedelta(days=1)
-        
-        return jsonify({
-            'data': data_ciclo.strftime('%d/%m/%Y'),
-            'inicio': inicio_fertil.strftime('%d/%m/%Y'),
-            'fim': fim_fertil.strftime('%d/%m/%Y')
-        })
-    except (ValueError, KeyError):
-        return jsonify({'error': 'Data inválida. Por favor, forneça uma data válida.'}), 400
-
-
-# Saudação personalizada com dados do usuário
-@app.route('/bem_vindo/<nome>/<int:idade>/<meta>')
-def greeting(nome, idade, meta):
-    return render_template('greeting.html', nome=nome, idade=idade, meta=meta)
 
 @app.route('/favicon.ico')
 def favicon():
-    return send_from_directory(os.path.join(app.root_path, 'static'),
-                               'icons/favicon.ico', mimetype='image/vnd.microsoft.icon')
-                               
-def main():
-    app.run(port=int(os.environ.get('PORT', 80)))
+    return send_file('src/static/icons/favicon.ico', mimetype='image/vnd.microsoft.icon')
 
-if __name__ == "__main__":
-    main()
+
+# Rota genérica para a calculadora
+@app.route('/<op>/<int:a>/<int:b>')
+def oper(op, a, b):
+    operations = {
+        'soma': {'name': 'Adição', 'symbol': '+'},
+        'sub': {'name': 'Subtração', 'symbol': '-'},
+        'mul': {'name': 'Multiplicação', 'symbol': '*'},
+        'div': {'name': 'Divisão', 'symbol': '/'}
+    }
+
+    operation_info = operations.get(op)
+
+    if not operation_info:
+        return render_template('error.html', error_message="A operação solicitada não foi encontrada.",
+                               status_code=404), 404
+
+    result = 0
+    if op == 'soma':
+        result = a + b
+    elif op == 'sub':
+        result = a - b
+    elif op == 'mul':
+        result = a * b
+    elif op == 'div':
+        if b != 0:
+            result = a / b
+        else:
+            result = 'Erro: Divisão por zero'
+
+    return render_template('math.html', name=operation_info['name'].upper(),
+                           operation_text=f"{a} {operation_info['symbol']} {b}",
+                           result=result)
+
+
+if __name__ == '__main__':
+    # Define a porta a partir da variável de ambiente PORT, ou usa 5000 como padrão
+    # A porta 80 geralmente requer privilégios de administrador, então 5000 é mais comum para desenvolvimento.
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=True, host='0.0.0.0', port=port)
